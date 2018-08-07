@@ -46,7 +46,7 @@ function get_host_list() {
     $hosts = array();
 
     foreach($config["racktables"]["list_query"] as $indexQuery => $listQuery) {
-        $result = do_curl_call($listQuery["host"] . $listQuery["api"], $listQuery["userpwd"]);
+        $result = do_curl_call($listQuery["host"] . $listQuery["list_api"], $listQuery["userpwd"]);
 
         $dom = new DOMDocument();
     
@@ -79,12 +79,68 @@ function get_host_list() {
         }
     }
 
-    var_dump($hosts);
-
     return $hosts;
 }
 
-function get_host_data($hosts) {
+/**
+ * 
+ */
+function get_host($hostname) {
+    global $config;
+
+    foreach($config["racktables"]["host_query"] as $indexQuery => $hostQuery) {
+        $result = do_curl_call($hostQuery["host"] . $hostQuery["list_api"], $hostQuery["userpwd"]);
+
+        $dom = new DOMDocument();
+    
+        @$dom->loadHTML($result);
+
+        foreach($dom->getElementsByTagName('a') as $link) {
+            $href = $link->getAttribute('href');
+            $strong = $link->getElementsByTagName('strong');
+            
+            if(strpos($href, "object_id") !== false && $strong->count() > 0) {
+                $s = str_replace("index.php?page=object&object_id=", "", $href);
+                
+                if($strong[0]->childNodes[0]->nodeValue === $hostname) {
+                    return array($indexQuery => array("name" => $hostname, "id" => $s));
+                }
+            }     
+        }
+    }
+
+    return null;
+}
+
+/**
+ * 
+ */
+function get_host_data($host) {
+    global $config;
+
+    $conf = $config["racktables"]["host_query"][key($host)];
+
+    $result = do_curl_call($conf["host"] .  $conf["host_api"] . $host[key($host)]["id"], $conf["userpwd"]);
+
+    $host_dom = new DOMDocument();
+
+    @$host_dom->loadHTML($result);
+
+    foreach($host_dom->getElementsByTagName('a') as $host_link) {
+        $href = $host_link->getAttribute('href');
+        if(strpos($href, "ipaddress") !== false) {
+            if(!array_key_exists("address", $host[key($host)])) {
+                $host[key($host)]["address"] = array();
+            }
+
+            array_push($host[key($host)]["address"], $host_link->nodeValue);
+        }
+    }
+
+    return $host;
+}
+
+function get_host_list_data($hosts) {
     global $config;
 
     foreach($config["racktables"]["list_query"] as $indexQuery => $listQuery) {
@@ -94,7 +150,7 @@ function get_host_data($hosts) {
             foreach($groupHosts as $hostId => $hostName) {
                 $host_data[$hostId] = array();
 
-                $result = do_curl_call($listQuery["host"] . "/racktables/index.php?page=object&tab=default&object_id=" . $hostId, $listQuery["userpwd"]);
+                $result = do_curl_call($listQuery["host"] .  $listQuery["host_api"] . $hostId, $listQuery["userpwd"]);
 
                 $host = new DOMDocument();
 
@@ -120,12 +176,79 @@ function get_host_data($hosts) {
         }
     }
 
-    var_dump($hosts);
-
     return $hosts;
 }
 
-function parse_host_vars($hosts) {
+/**
+ * 
+ */
+function parse_host_vars($host) {
+    global $config;
+
+    $conf = $config["racktables"]["host_query"][key($host)];
+
+    if(array_key_exists("check_ansible_port", $conf) && $conf["check_ansible_port"]) {
+                
+        $ports = array_key_exists("host_vars", $conf) && array_key_exists("ansible_port", $conf["host_vars"]) 
+            ? $conf["host_vars"]["ansible_port"] 
+            : array(22);
+        
+        $checked_host = array();
+
+        if($addressPort = check_ansible_port($host[key($host)], $ports)) {
+            $host[key($host)]["ansible_host"] = $addressPort[0][0];
+            $host[key($host)]["ansible_port"] = $addressPort[0][1];
+        } else {
+            return null;
+        }
+    }
+
+    $host_vars = get_host_vars($conf, $host[key($host)]);
+
+    if(count($host_vars) > 0) {
+        $host[key($host)]["host_vars"] = $host_vars;
+    }
+
+    return $host;
+}
+
+function get_host_vars($host_config, $host) {
+
+    $host_vars = array();
+
+    if(array_key_exists("host_vars", $host_config) && count($host_config["host_vars"]) > 0) {
+        foreach($host_config["host_vars"] as $key => $value) {
+            switch($key) {
+                case "ansible_host":
+                    if(array_key_exists($key, $host)) {
+                        $host_vars[$key] = $host[$key];
+                    } else if(array_key_exists("address", $host) && count($host["address"]) > 0) {
+                        $host_vars[$key] = $host["address"][0];
+                    }
+                    break;
+                case "ansible_port":
+                    if(array_key_exists($key, $host)) {
+                        $host_vars[$key] = $host[$key];
+                    } else if(is_array($value) && count($value) > 0) {
+                        $host_vars[$key] = $value[0];
+                    } else {
+                        $host_vars[$key] = $value;
+                    }
+                    break;
+                default:
+                    $host_vars[$key] = $value;
+                    break;
+            }
+        }
+    }
+
+    return $host_vars;
+}
+
+/**
+ * 
+ */
+function parse_host_list_vars($hosts) {
     global $config;
 
     foreach($config["racktables"]["list_query"] as $indexQuery => $listQuery) {
@@ -152,33 +275,11 @@ function parse_host_vars($hosts) {
 
             if(array_key_exists("host_vars", $hostFilter) && count($hostFilter["host_vars"]) > 0) {
                 foreach($hosts[$indexQuery][$hostFilterName] as $hostId => $hostData) {
-                    if(!array_key_exists("host_vars", $hosts[$indexQuery][$hostFilterName][$hostId])) {
-                        $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"] = array();
-                    }
-                    foreach($hostFilter["host_vars"] as $key => $value) {
-                        switch($key) {
-                            case "ansible_host":
-                                $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = array_key_exists($key, $hostData) ? $hostData[$key] : $value;
-                                if(array_key_exists($key, $hostData)) {
-                                    $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = $hostData[$key];
-                                } else if(array_key_exists("address", $hostData) && count($hostData["address"]) > 0) {
-                                    $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = $hostData["address"][0];
-                                }
-                                break;
-                            case "ansible_port":
-                                $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = array_key_exists($key, $hostData) ? $hostData[$key] : $value;
-                                if(array_key_exists($key, $hostData)) {
-                                    $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = $hostData[$key];
-                                } else if(is_array($value) && count($value) > 0) {
-                                    $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = $value[0];
-                                } else {
-                                    $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = $value;
-                                }
-                                break;
-                            default:
-                                $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"][$key] = $value;
-                                break;
-                        }
+
+                    $host_vars = get_host_vars($hostFilter, $hostData);
+
+                    if(count($host_vars) > 0) {
+                        $hosts[$indexQuery][$hostFilterName][$hostId]["host_vars"] = $host_vars;
                     }
                 } 
             }
@@ -227,7 +328,7 @@ function get_ansible_port($address, $ports) {
 /**
  * 
  */
-function to_ansible_list_format($hosts) {
+function host_list_to_ansible_list_format($hosts) {
     global $config;
 
     $ansible_list = array("_meta" => array());
@@ -372,9 +473,9 @@ function get_inventory($opts) {
 	if(!array_key_exists("help", $opts) && (array_key_exists("list", $opts) || array_key_exists("static", $opts))) {
         
         $data = get_host_list();
-        $data = get_host_data($data);
-        $data = parse_host_vars($data);
-        $data_ansible = to_ansible_list_format($data);
+        $data = get_host_list_data($data);
+        $data = parse_host_list_vars($data);
+        $data_ansible = host_list_to_ansible_list_format($data);
 
 		if(array_key_exists("list", $opts)) {
 			$ret = json_encode($data_ansible);
@@ -388,26 +489,17 @@ function get_inventory($opts) {
         
         $ret = isset($ret) ? $ret : "{}";		
 	} elseif(!array_key_exists("help", $opts) && array_key_exists("host", $opts)) {
-        /*
-		$data = get_host($opts["host"]);
-		$data = is_host_active($data);
-
-		foreach($data as $key => $value) {
-			if(count($data[$key][0]) > 0) {
-				$host_vars = parse_host_vars($data[$key][0], 
-					$config["op5"]["host_query"][$key]["host_vars"],
-					$config["op5"]["host_query"][$key]["columns"]
-				);
-				break;
-			}
-		}
-		
-        $ret = isset($host_vars) ? json_encode($host_vars) : "{}";
-        */
-        $ret = "{}";
+        
+        $data = get_host($opts["host"]);
+        if($data)
+            $data = get_host_data($data);
+        if($data)
+            $data = parse_host_vars($data);
+        
+        $ret = $data && count($data[key($data)]["host_vars"]) > 0 ? json_encode($data[key($data)]["host_vars"]) : "{}";
 	} else {
-		$ret = "Usage: get_op5_inventory.php [OPTION]\n";
-		$ret .= "op5-ansible-dynamic-inventory opengd@2018\n\n";
+		$ret = "Usage: get_inventory.php [OPTION]\n";
+		$ret .= "racktables-ansible-dynamic-inventory opengd@2018\n\n";
 		$ret .= "--list\t\t\t\tget json list of op5 hosts\n";
 		$ret .= "--host=host\t\t\tget ansible meta variable from op5 host\n";
 		$ret .= "--static\t\t\tcreate inventory file from op5 hosts\n";
