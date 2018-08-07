@@ -3,11 +3,12 @@
         "list_query":[
             {
                 "userpwd": "username:password",
-                "host": "http:\/\/racktables.host.address",
-                "api": "\/racktables\/index.php?page=depot",
+                "host": "http:\/\/your.racktables.host",
+                "list_api": "\/racktables\/index.php?page=depot",
+                "host_api": "\/racktables\/index.php?page=object&tab=default&object_id=",
                 "host_filters": {
                     "some": {
-                        "filter": ["\/op5\/"],
+                        "filter": ["\/your_regexp\/"],
                         "host_vars":{
                             "ansible_port": [22, 22022],
                             "ansible_host": "ADDRESS" 
@@ -20,9 +21,9 @@
         "host_query":[
             {
                 "userpwd": "username:password",
-                "host": "http:\/\/racktables.host.address",
-                "api": "\/racktables\/index.php?page=depot",
-                "filter": "",
+                "host": "http:\/\/your.racktables.host",
+                "list_api": "\/racktables\/index.php?page=depot",
+                "host_api": "\/racktables\/index.php?page=object&tab=default&object_id=",
                 "host_vars":{
                     "ansible_port": [22, 22022],
                     "ansible_host": "ADDRESS" 
