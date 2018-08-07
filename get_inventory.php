@@ -38,7 +38,9 @@ function do_curl_call($call, $userpass) {
 }
 
 /**
- * 
+ * Get a host list from racktable based on config
+ *
+ * @return array
  */
 function get_host_list() {
     global $config;
@@ -83,7 +85,11 @@ function get_host_list() {
 }
 
 /**
+ * Get host from racktables matching input hostname
  * 
+ * @param string $hostname
+ * 
+ * @return array
  */
 function get_host($hostname) {
     global $config;
@@ -113,7 +119,11 @@ function get_host($hostname) {
 }
 
 /**
+ * Get host data for a single host from racktables
  * 
+ * @param array $host
+ * 
+ * @return array
  */
 function get_host_data($host) {
     global $config;
@@ -140,6 +150,13 @@ function get_host_data($host) {
     return $host;
 }
 
+/**
+ * Get host data for all items in a host list from racktables
+ * 
+ * @param array $hosts
+ * 
+ * @return array
+ */
 function get_host_list_data($hosts) {
     global $config;
 
@@ -180,7 +197,11 @@ function get_host_list_data($hosts) {
 }
 
 /**
+ * Parse any host variables
  * 
+ * @param array $host
+ * 
+ * @return array
  */
 function parse_host_vars($host) {
     global $config;
@@ -212,6 +233,14 @@ function parse_host_vars($host) {
     return $host;
 }
 
+/**
+ * Get any ansible host variables
+ * 
+ * @param array $host_config
+ * @param array $host
+ * 
+ * @return array 
+ */
 function get_host_vars($host_config, $host) {
 
     $host_vars = array();
@@ -246,7 +275,11 @@ function get_host_vars($host_config, $host) {
 }
 
 /**
+ * Parse any host list ansible variables
  * 
+ * @param array $hosts
+ * 
+ * @return array
  */
 function parse_host_list_vars($hosts) {
     global $config;
@@ -289,6 +322,14 @@ function parse_host_list_vars($hosts) {
     return $hosts;
 }
 
+/**
+ * Check ansible port if it open
+ * 
+ * @param array $hostData
+ * @param array $ports
+ * 
+ * @return array
+ */
 function check_ansible_port($hostData, $ports) {
     $addressPort = array();
     foreach($hostData["address"] as $address) {
@@ -326,7 +367,11 @@ function get_ansible_port($address, $ports) {
 }
 
 /**
+ * Create a array based on ansible json format
  * 
+ * @param array $hosts
+ * 
+ * @return array
  */
 function host_list_to_ansible_list_format($hosts) {
     global $config;
@@ -414,50 +459,6 @@ function create_static_inventory_file($data, $filename) {
 	}
 
 	fclose($myfile);
-}
-
-/**
- * 
- */
-function get_all_matching_filter() {
-    global $config;
-    $result = do_curl_call($config["racktables"]["list_query"][0]["host"] . $config["racktables"]["list_query"][0]["api"], $config["racktables"]["list_query"][0]["userpwd"]);
-
-    $dom = new DOMDocument();
-    
-    @$dom->loadHTML($result);
-    $total = 0;
-    foreach($dom->getElementsByTagName('a') as $link) {
-        # Show the <a href>
-        $href = $link->getAttribute('href');
-        $strong = $link->getElementsByTagName('strong');
-        //echo $href;
-        
-        if(strpos($href, "object_id") !== false && $strong->count() > 0) {
-            $s = str_replace("index.php?page=object&object_id=", "", $href);
-    
-            echo $s . " " . $strong->count() . " " . $strong[0]->childNodes[0]->nodeValue;
-                    
-            $total++;
-    
-            $host_result = do_curl_call(RACKTABLES_HOST . "/racktables/index.php?page=object&tab=default&object_id=" . $s, USERPASS);
-            $host_dom = new DOMDocument();
-    
-            @$host_dom->loadHTML($host_result);
-    
-            foreach($host_dom->getElementsByTagName('a') as $host_link) {
-                $href = $host_link->getAttribute('href');
-                if(strpos($href, "ipaddress") !== false) {
-                    echo " " . $host_link->nodeValue;
-                }
-            }
-    
-            echo "\n";
-        }
-        
-    }
-    echo "Total" . $total;
-    //echo serialize($result);
 }
 
 /**
