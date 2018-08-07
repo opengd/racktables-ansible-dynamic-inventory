@@ -19,11 +19,25 @@ racktables-ansible-dynamic-inventory opengd@2018
 
 ### Prerequisites
 
-To run this script you will need PHP and the PHP cURL module.
+To run this script you will need PHP and the PHP cURL module and the php-xml module.
 
 ```
+#How to install Prerequisites on Ubuntu
+
+# Update apt
+sudo apt-get update
+
+# Install php curl module for PHP on Ubuntu
+sudo apt-get install php-curl
+
 # Install php curl module for PHP 7.2 on Ubuntu
 sudo apt-get install php7.2-curl
+
+#Install php xml module PHP on Ubuntu
+sudo apt-get install php-xml
+
+#Install php xml module PHP 7.2 on Ubuntu
+sudo apt-get install php7.2-xml
 ```
 
 ### Installing
