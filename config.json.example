@@ -13,7 +13,11 @@
                             "ansible_port": [22, 22022],
                             "ansible_host": "ADDRESS" 
                         },
-                        "check_ansible_port": true
+                        "check_ansible_port": true,
+                        "props_filters": { 
+                            "In Use": "\/Yes|No\/",
+                            "Explicit tags": "\/My Name\/"
+                        }
                     }
                 }
             }

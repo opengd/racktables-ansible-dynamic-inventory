@@ -69,7 +69,7 @@ function get_host_list() {
         $hosts[$indexQuery] = array();
         foreach($listQuery["host_filters"] as $hostFilterName => $hostFilter) {
             
-            if(is_array($hostFilter["filter"]) && count($hostFilter["filter"]) > 0) {
+            if(array_key_exists("filter", $hostFilter) && is_array($hostFilter["filter"]) && count($hostFilter["filter"]) > 0) {
                 $hosts[$indexQuery][$hostFilterName] = array();
                 
                 foreach($hostFilter["filter"] as $filter) {
@@ -173,22 +173,121 @@ function get_host_list_data($hosts) {
 
                 @$host->loadHTML($result);
 
-                foreach($host->getElementsByTagName('a') as $host_link) {
-                    $href = $host_link->getAttribute('href');
-                    if(strpos($href, "ipaddress") !== false) {
-                        if(!array_key_exists("address", $host_data[$hostId])) {
-                            $host_data[$hostId]["address"] = array();
-                        }
+                $host_data[$hostId]["address"] = get_host_addresses($host);
 
-                        array_push($host_data[$hostId]["address"], $host_link->nodeValue);
-                    }
-                }
-
+                $host_data[$hostId]["props"] = get_host_properties($host);
+                
                 $host_data[$hostId]["name"] = $hostName;
+
+                //var_dump($host_data[$hostId]);
             }
 
             foreach($host_data as $hostId => $hostData) {
                 $hosts[$indexQuery][$groupName][$hostId] = $hostData;
+            }
+        }
+    }
+
+    return $hosts;
+}
+
+/**
+ * Get host addresses
+ * 
+ * @param  DOMDocument $hostdom
+ * 
+ * @return array
+ */
+ function get_host_addresses($hostdom) {
+    $addresses = array();
+
+    foreach($hostdom->getElementsByTagName('a') as $host_link) {
+        $href = $host_link->getAttribute('href');
+
+        if(strpos($href, "ipaddress") !== false) {
+            array_push($addresses, $host_link->nodeValue);
+        }
+    }
+
+    return $addresses;
+ }
+
+/**
+ * Get host properties
+ * 
+ * @param  DOMDocument $hostdom
+ * 
+ * @return array
+ */
+function get_host_properties($hostdom) {
+    $match = array();
+
+    foreach($hostdom->getElementsByTagName('tr') as $ind => $tr) {
+        $th = $tr->getElementsByTagName('th');
+
+        foreach($th as $n) {
+            if($n->nodeValue && strpos($n->nodeValue, ":") !== false && $ind > 1) {
+                $match[str_replace(":", "", $n->nodeValue)] = $tr;
+            }
+        }
+    }
+
+    foreach($match as $prop => $tr) {
+        $td = $tr->getElementsByTagName('td');
+
+        foreach($td as $n) {
+            $match[$prop] = (count($n->childNodes) > 0) ? $n->childNodes[0]->nodeValue : $n->nodeValue;
+        }
+    }
+
+    return $match;
+}
+
+/**
+ * Filter host that match prop_filters in config
+ * 
+ * @param array $hosts
+ * 
+ * @return array
+ */
+function filter_by_props($hosts) {
+    global $config, $verbose;
+
+    if($verbose) echo "\n# Filter props";
+
+    foreach($config["racktables"]["list_query"] as $indexQuery => $listQuery) {
+        foreach($listQuery["host_filters"] as $hostFilterName => $hostFilter) {
+            if(array_key_exists("props_filters", $listQuery["host_filters"][$hostFilterName]) && count($listQuery["host_filters"][$hostFilterName]["props_filters"]) > 0) {
+                if($verbose) echo "\nChecking filter props for host filter " . $hostFilterName;
+                $non_matches = array();
+                foreach($hosts[$indexQuery][$hostFilterName] as $hostId => $hostData) {
+                    if($verbose) echo "\n* " . $hostId . " " . $hostData["name"];
+                    $is_match = false;
+                    foreach($listQuery["host_filters"][$hostFilterName]["props_filters"] as $prop_name => $prop_val) {
+                        if(array_key_exists($prop_name, $hostData["props"])) {
+                            //var_dump($hostData["props"][$prop_name]);
+                            if($verbose) echo "\n" . $prop_name .  ": " . $prop_val;
+                            if(preg_match($prop_val, $hostData["props"][$prop_name])) {
+                                if($verbose) echo " MATCH " . $hostData["props"][$prop_name];
+                                $is_match = true;
+                            } else {
+                                if($verbose) echo " NO match " . $hostData["props"][$prop_name] . " (Mark host for removal from list.)";                         
+                                $is_match = false;
+                                break;
+                            }
+                        }
+                    }
+                    if(!$is_match) {
+                        array_push($non_matches, $hostId);
+                    }  
+                }
+
+                foreach($non_matches as $id) {
+                    if($verbose) echo "\nRemove host id " . $id . " from list.";
+                    unset($hosts[$indexQuery][$hostFilterName][$id]);
+                }
+            } else if($verbose) {
+                echo "\nNo filter props for host filter " . $hostFilterName;
             }
         }
     }
@@ -475,6 +574,7 @@ function get_inventory($opts) {
         
         $data = get_host_list();
         $data = get_host_list_data($data);
+        $data = filter_by_props($data);
         $data = parse_host_list_vars($data);
         $data_ansible = host_list_to_ansible_list_format($data);
 
