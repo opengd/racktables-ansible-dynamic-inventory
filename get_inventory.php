@@ -60,7 +60,7 @@ function get_host_list() {
             $href = $link->getAttribute('href');
             $strong = $link->getElementsByTagName('strong');
             
-            if(strpos($href, "object_id") !== false && $strong->count() > 0) {
+            if(strpos($href, "object_id") !== false && $strong->length > 0) {
                 $s = str_replace("index.php?page=object&object_id=", "", $href);
                 $host_list[$s] = $strong[0]->childNodes[0]->nodeValue;          
             }     
@@ -105,7 +105,7 @@ function get_host($hostname) {
             $href = $link->getAttribute('href');
             $strong = $link->getElementsByTagName('strong');
             
-            if(strpos($href, "object_id") !== false && $strong->count() > 0) {
+            if(strpos($href, "object_id") !== false && $strong->length > 0) {
                 $s = str_replace("index.php?page=object&object_id=", "", $href);
                 
                 if($strong[0]->childNodes[0]->nodeValue === $hostname) {
